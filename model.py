@@ -1,83 +1,67 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import os
 
-from constants import *
-import data
-from tensorflow.keras import layers, models
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, BatchNormalization, Dropout, Flatten, Dense
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
+import tensorflow.keras.backend as K
+
+from params import pr
 
 
-def get_model(model_path):
-    if model_path:
-        if not os.path.isdir(MODELS_DIR):
-            raise Exception('Saved models directory with name \'' + MODELS_DIR + '\' not found!')
+def get_model(num_classes, weights_path=None):
 
-        model = models.load_model(MODELS_DIR + model_path, compile=False)
-    else:
-        model = create_model()
+    model = create_model(num_classes)
 
-    build_model(model)
-
-    return model
-
-
-def build_model(model):
-    model.compile(optimizer='adam',
-                  loss='sparse_categorical_crossentropy',
-                  metrics=['accuracy'])
-
-
-def create_model(input_layer=None):
-    model = models.Sequential()
-
-    if input_layer:
-        model.add(input_layer)
-
-    model.add(layers.Conv2D(filters=16,
-                            kernel_size=5,
-                            activation='relu',
-                            strides=[1, 1],
-                            padding='SAME', use_bias=True))
-    model.add(layers.MaxPool2D())
-
-    model.add(layers.Conv2D(filters=32,
-                            kernel_size=3,
-                            activation='relu',
-                            strides=[1, 1],
-                            padding='SAME', use_bias=True))
-    model.add(layers.MaxPool2D())
-    model.add(layers.Dropout(DROPOUT_RATE))
-    model.add(layers.BatchNormalization())
-
-    model.add(layers.Conv2D(filters=64,
-                            kernel_size=3,
-                            activation='relu',
-                            strides=[2, 2],
-                            padding='SAME', use_bias=True))
-
-    model.add(layers.Conv2D(filters=128,
-                            kernel_size=3,
-                            activation='relu',
-                            strides=[1, 1],
-                            padding='SAME', use_bias=True))
-    model.add(layers.MaxPool2D())
-    model.add(layers.Dropout(DROPOUT_RATE))
-
-    model.add(layers.Flatten())
-    model.add(layers.Dropout(DROPOUT_RATE))
-    model.add(layers.Dense(256, activation='relu'))
-
-    num_of_labels = len(data.get_words_list())
-    model.add(layers.Dense(num_of_labels, activation='softmax'))
+    if weights_path:
+        model.load_weights(weights_path, by_name=False)#, skip_mismatch=True)
+        print('Load weights {}.'.format(weights_path))
 
     return model
 
 
-def print_model_architecture():
-    input_layer = layers.InputLayer(input_shape=[FEATURES_COUNT, 32, 1], batch_size=BATCH_SIZE)
+def create_model(num_classes):
+    input_tensor = Input(shape=(pr.n_features, pr.feature_size, 1), name='feature_input')
 
-    model = create_model(input_layer)
+    x = Conv2D(filters=16,
+               kernel_size=5,
+               activation='relu',
+               strides=[1, 1],
+               padding='SAME', use_bias=True)(input_tensor)
+    x = MaxPooling2D()(x)
 
-    print(model.summary())
+    x = Conv2D(filters=32,
+               kernel_size=3,
+               activation='relu',
+               strides=[1, 1],
+               padding='SAME', use_bias=True)(x)
+    x = MaxPooling2D()(x)
+    x = Dropout(0.5)(x)
+    x = BatchNormalization()(x)
+
+    x = Conv2D(filters=64,
+               kernel_size=3,
+               activation='relu',
+               strides=[2, 2],
+               padding='SAME', use_bias=True)(x)
+
+    x = Conv2D(filters=128,
+               kernel_size=3,
+               activation='relu',
+               strides=[1, 1],
+               padding='SAME', use_bias=True)(x)
+    x = MaxPooling2D()(x)
+    x = Dropout(0.5)(x)
+
+    x = Flatten()(x)
+    x = Dropout(0.5)(x)
+    x = Dense(256, activation='relu')(x)
+
+    x = Dense(num_classes, activation='softmax', name='score_predict')(x)
+
+    # Create model.
+    model = Model(input_tensor, x)
+
+    return model
+
